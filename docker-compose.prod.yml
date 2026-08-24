@@ -1,0 +1,8 @@
+services:
+  backend:
+    environment:
+      JWT_PRIVATE_KEY_PATH: file:/run/secrets/app.key
+      JWT_PUBLIC_KEY_PATH: file:/run/secrets/app.pub
+    volumes:
+      - ./deploy/prod-secrets/app.key:/run/secrets/app.key:ro
+      - ./deploy/prod-secrets/app.pub:/run/secrets/app.pub:ro

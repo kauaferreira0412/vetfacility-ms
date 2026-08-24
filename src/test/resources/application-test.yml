@@ -1,0 +1,36 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:vetfacility_test_${random.uuid};MODE=PostgreSQL;DATABASE_TO_UPPER=FALSE;DEFAULT_NULL_ORDERING=HIGH
+    username: sa
+    password: ""
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: false
+    show-sql: false
+
+  flyway:
+    enabled: false
+
+app:
+  security:
+    jwt:
+      private-key: classpath:certs/app.key
+      public-key: classpath:certs/app.pub
+      expiration-seconds: 3600
+      issuer: vetfacility
+
+  cors:
+    allowed-origins: http://localhost:5173
+
+  root:
+    email: root@vetfacility.local
+    password: TesteRoot123!
+
+logging:
+  level:
+    com.br.vetfacility: INFO
