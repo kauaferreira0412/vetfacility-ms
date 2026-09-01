@@ -4,6 +4,7 @@ import com.br.vetfacility.dto.agendamento.AgendamentoRequest;
 import com.br.vetfacility.dto.agendamento.AgendamentoResponse;
 import com.br.vetfacility.dto.agendamento.CancelarAgendamentoRequest;
 import com.br.vetfacility.dto.agendamento.ConcluirAgendamentoRequest;
+import com.br.vetfacility.dto.agendamento.IniciarAtendimentoRequest;
 import com.br.vetfacility.service.AgendamentoService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -60,9 +61,10 @@ public class AgendamentoController {
 
     @PostMapping("/{id}/iniciar")
     @PreAuthorize("hasAuthority('AGENDAMENTO_CONCLUIR')")
-    @Operation(summary = "Inicia o atendimento (AGENDADO -> EM_ATENDIMENTO)")
-    public AgendamentoResponse iniciar(@PathVariable Long id) {
-        return agendamentoService.iniciarAtendimento(id);
+    @Operation(summary = "Inicia o atendimento (AGENDADO -> EM_ATENDIMENTO), registrando o horário de início e, opcionalmente, os produtos que serão usados")
+    public AgendamentoResponse iniciar(@PathVariable Long id,
+                                        @RequestBody(required = false) IniciarAtendimentoRequest request) {
+        return agendamentoService.iniciarAtendimento(id, request);
     }
 
     @PostMapping("/{id}/concluir")

@@ -2,7 +2,9 @@ package com.br.vetfacility.dto.agendamento;
 
 import com.br.vetfacility.domain.Agendamento;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 public record AgendamentoResponse(
         Long id,
@@ -13,8 +15,13 @@ public record AgendamentoResponse(
         LocalDateTime dataHora,
         String status,
         String observacao,
-        String motivoCancelamento
+        String motivoCancelamento,
+        LocalDateTime iniciadoEm,
+        List<ProdutoPlanejadoResponse> produtosPlanejados
 ) {
+    public record ProdutoPlanejadoResponse(Long produtoId, String produtoNome, BigDecimal quantidade) {
+    }
+
     public static AgendamentoResponse from(Agendamento a) {
         return new AgendamentoResponse(
                 a.getId(),
@@ -25,7 +32,11 @@ public record AgendamentoResponse(
                 a.getDataHora(),
                 a.getStatus().name(),
                 a.getObservacao(),
-                a.getMotivoCancelamento()
+                a.getMotivoCancelamento(),
+                a.getIniciadoEm(),
+                a.getProdutosPlanejados().stream()
+                        .map(p -> new ProdutoPlanejadoResponse(p.getProdutoId(), p.getProdutoNome(), p.getQuantidade()))
+                        .toList()
         );
     }
 }

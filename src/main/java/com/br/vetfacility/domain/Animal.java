@@ -1,5 +1,7 @@
 package com.br.vetfacility.domain;
 
+import com.br.vetfacility.enums.Porte;
+import com.br.vetfacility.enums.Sexo;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -11,7 +13,19 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "animal")
+@Table(name = "animal", indexes = {
+        @Index(name = "idx_animal_empresa", columnList = "empresa_id"),
+        @Index(name = "idx_animal_nome", columnList = "nome"),
+        @Index(name = "idx_animal_especie", columnList = "especie"),
+        @Index(name = "idx_animal_porte", columnList = "porte"),
+        @Index(name = "idx_animal_cliente", columnList = "cliente_id"),
+        @Index(name = "idx_animal_raca", columnList = "raca"),
+        @Index(name = "idx_animal_sexo", columnList = "sexo"),
+        @Index(name = "idx_animal_data_nascimento", columnList = "data_nascimento"),
+        @Index(name = "idx_animal_peso", columnList = "peso"),
+        @Index(name = "idx_animal_cor_pelagem", columnList = "cor_pelagem"),
+        @Index(name = "idx_animal_observacoes", columnList = "observacoes"),
+})
 @Getter
 @Setter
 @NoArgsConstructor

@@ -24,7 +24,8 @@ public class TestGlobalRootPerfilSeeder implements CommandLineRunner {
             "EMPRESA_GERENCIAR", "PERFIL_GERENCIAR", "USUARIO_VISUALIZAR", "USUARIO_GERENCIAR",
             "CLIENTE_VISUALIZAR", "CLIENTE_GERENCIAR", "ANIMAL_VISUALIZAR", "ANIMAL_GERENCIAR",
             "SERVICO_VISUALIZAR", "AGENDAMENTO_VISUALIZAR", "AGENDAMENTO_CRIAR", "AGENDAMENTO_CANCELAR",
-            "AGENDAMENTO_CONCLUIR", "PRODUTO_VISUALIZAR", "PRODUTO_GERENCIAR"
+            "AGENDAMENTO_CONCLUIR", "PRODUTO_VISUALIZAR", "PRODUTO_GERENCIAR",
+            "FINANCEIRO_VISUALIZAR", "FINANCEIRO_GERENCIAR", "EMPRESA_PERSONALIZAR"
     );
 
     private final PerfilRepository perfilRepository;
@@ -69,6 +70,8 @@ public class TestGlobalRootPerfilSeeder implements CommandLineRunner {
         if (codigo.startsWith("CLIENTE") || codigo.startsWith("ANIMAL")) return "CLIENTES";
         if (codigo.startsWith("SERVICO") || codigo.startsWith("AGENDAMENTO")) return "AGENDAMENTO";
         if (codigo.startsWith("PRODUTO")) return "ESTOQUE";
+        if (codigo.startsWith("FINANCEIRO")) return "FINANCEIRO";
+        if (codigo.startsWith("EMPRESA")) return "PERSONALIZACAO";
         return "GERAL";
     }
 }

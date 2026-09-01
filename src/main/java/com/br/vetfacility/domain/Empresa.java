@@ -10,7 +10,10 @@ import lombok.Setter;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "empresa")
+@Table(name = "empresa", indexes = {
+        @Index(name = "idx_empresa_nome", columnList = "nome"),
+        @Index(name = "idx_empresa_criado_em", columnList = "criado_em"),
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -25,7 +28,7 @@ public class Empresa {
     @Column(nullable = false, length = 150)
     private String nome;
 
-    @Column(name = "logotipo_url", length = 500)
+    @Column(name = "logotipo_url", columnDefinition = "TEXT")
     private String logotipoUrl;
 
     @Column(name = "criado_em", nullable = false, updatable = false)

@@ -1,9 +1,11 @@
 package com.br.vetfacility.service;
 
 import com.br.vetfacility.domain.*;
+import com.br.vetfacility.enums.StatusAgendamento;
 import com.br.vetfacility.dto.agendamento.AgendamentoRequest;
 import com.br.vetfacility.dto.agendamento.CancelarAgendamentoRequest;
 import com.br.vetfacility.dto.agendamento.ConcluirAgendamentoRequest;
+import com.br.vetfacility.dto.agendamento.IniciarAtendimentoRequest;
 import com.br.vetfacility.exception.BusinessException;
 import com.br.vetfacility.repository.*;
 import com.br.vetfacility.support.TestSecurityContext;
@@ -39,6 +41,8 @@ class AgendamentoServiceTest {
     private ProdutoRepository produtoRepository;
     @Mock
     private EmpresaRepository empresaRepository;
+    @Mock
+    private FinanceiroService financeiroService;
 
     private AgendamentoService service;
 
@@ -47,7 +51,7 @@ class AgendamentoServiceTest {
     @BeforeEach
     void setUp() {
         service = new AgendamentoService(agendamentoRepository, animalRepository, servicoRepository,
-                usuarioRepository, produtoRepository, empresaRepository);
+                usuarioRepository, produtoRepository, empresaRepository, financeiroService);
         TestSecurityContext.autenticarComoUsuarioDaEmpresa(10L, EMPRESA_ID, List.of("AGENDAMENTO_CRIAR"));
     }
 
@@ -166,13 +170,32 @@ class AgendamentoServiceTest {
         when(agendamentoRepository.save(any(Agendamento.class))).thenAnswer(inv -> inv.getArgument(0));
 
         var request = new ConcluirAgendamentoRequest(
-                List.of(new ConcluirAgendamentoRequest.ProdutoConsumido(1L, new BigDecimal("2.00"))));
+                List.of(new ConcluirAgendamentoRequest.ProdutoConsumido(1L, new BigDecimal("2.00"))), null);
 
         var response = service.concluir(1L, request);
 
         assertThat(response.status()).isEqualTo("CONCLUIDO");
         assertThat(produto.getQuantidadeEstoque()).isEqualByComparingTo("3.00");
         verify(produtoRepository).save(produto);
+        verify(financeiroService, never()).registrarGanhoDeAgendamento(any(), any());
+    }
+
+    @Test
+    void concluir_comValorCobrado_deveRegistrarGanhoFinanceiro() {
+        Agendamento agendamento = Agendamento.builder()
+                .id(1L).animal(animal()).servico(servico(60)).usuario(usuario())
+                .status(StatusAgendamento.AGENDADO)
+                .build();
+
+        when(agendamentoRepository.findByIdAndEmpresaId(1L, EMPRESA_ID)).thenReturn(Optional.of(agendamento));
+        when(agendamentoRepository.save(any(Agendamento.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var request = new ConcluirAgendamentoRequest(null, new BigDecimal("80.00"));
+
+        var response = service.concluir(1L, request);
+
+        assertThat(response.status()).isEqualTo("CONCLUIDO");
+        verify(financeiroService).registrarGanhoDeAgendamento(agendamento, new BigDecimal("80.00"));
     }
 
     @Test
@@ -190,7 +213,7 @@ class AgendamentoServiceTest {
         when(produtoRepository.findByIdAndEmpresaId(1L, EMPRESA_ID)).thenReturn(Optional.of(produto));
 
         var request = new ConcluirAgendamentoRequest(
-                List.of(new ConcluirAgendamentoRequest.ProdutoConsumido(1L, new BigDecimal("5.00"))));
+                List.of(new ConcluirAgendamentoRequest.ProdutoConsumido(1L, new BigDecimal("5.00"))), null);
 
         assertThatThrownBy(() -> service.concluir(1L, request))
                 .isInstanceOf(BusinessException.class)
@@ -241,9 +264,31 @@ class AgendamentoServiceTest {
         when(agendamentoRepository.findByIdAndEmpresaId(1L, EMPRESA_ID)).thenReturn(Optional.of(agendamento));
         when(agendamentoRepository.save(any(Agendamento.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        var response = service.iniciarAtendimento(1L);
+        var response = service.iniciarAtendimento(1L, null);
 
         assertThat(response.status()).isEqualTo("EM_ATENDIMENTO");
+        assertThat(response.iniciadoEm()).isNotNull();
+    }
+
+    @Test
+    void iniciarAtendimento_semSelecaoManual_deveUsarProdutosPadraoDoServico() {
+        Produto produto = Produto.builder().id(1L).nome("Shampoo").quantidadeEstoque(new BigDecimal("5.00"))
+                .quantidadeMinima(new BigDecimal("1.00")).unidade("un").empresa(empresa()).build();
+        Servico servicoComPadrao = servico(60);
+        servicoComPadrao.getProdutosPadrao().add(ServicoProduto.builder()
+                .id(new ServicoProdutoId(servicoComPadrao.getId(), produto.getId()))
+                .servico(servicoComPadrao).produto(produto).quantidadePadrao(new BigDecimal("1.50")).build());
+
+        Agendamento agendamento = Agendamento.builder().id(1L).animal(animal()).servico(servicoComPadrao)
+                .usuario(usuario()).status(StatusAgendamento.AGENDADO).build();
+        when(agendamentoRepository.findByIdAndEmpresaId(1L, EMPRESA_ID)).thenReturn(Optional.of(agendamento));
+        when(agendamentoRepository.save(any(Agendamento.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var response = service.iniciarAtendimento(1L, null);
+
+        assertThat(response.produtosPlanejados()).hasSize(1);
+        assertThat(response.produtosPlanejados().get(0).produtoNome()).isEqualTo("Shampoo");
+        assertThat(response.produtosPlanejados().get(0).quantidade()).isEqualByComparingTo("1.50");
     }
 
     @Test
@@ -251,6 +296,51 @@ class AgendamentoServiceTest {
         Agendamento agendamento = Agendamento.builder().id(1L).status(StatusAgendamento.CONCLUIDO).build();
         when(agendamentoRepository.findByIdAndEmpresaId(1L, EMPRESA_ID)).thenReturn(Optional.of(agendamento));
 
-        assertThatThrownBy(() -> service.iniciarAtendimento(1L)).isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> service.iniciarAtendimento(1L, null)).isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void iniciarAtendimento_comProdutosPlanejados_deveRegistrarSemAlterarEstoque() {
+        Agendamento agendamento = Agendamento.builder().id(1L).animal(animal()).servico(servico(60))
+                .usuario(usuario()).status(StatusAgendamento.AGENDADO).build();
+        Produto produto = Produto.builder().id(1L).nome("Shampoo").quantidadeEstoque(new BigDecimal("5.00"))
+                .quantidadeMinima(new BigDecimal("1.00")).unidade("un").empresa(empresa()).build();
+
+        when(agendamentoRepository.findByIdAndEmpresaId(1L, EMPRESA_ID)).thenReturn(Optional.of(agendamento));
+        when(produtoRepository.findByIdAndEmpresaId(1L, EMPRESA_ID)).thenReturn(Optional.of(produto));
+        when(agendamentoRepository.save(any(Agendamento.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var request = new IniciarAtendimentoRequest(
+                List.of(new IniciarAtendimentoRequest.ProdutoPlanejado(1L, new BigDecimal("2.00"))));
+
+        var response = service.iniciarAtendimento(1L, request);
+
+        assertThat(response.status()).isEqualTo("EM_ATENDIMENTO");
+        assertThat(response.produtosPlanejados()).hasSize(1);
+        assertThat(response.produtosPlanejados().get(0).produtoNome()).isEqualTo("Shampoo");
+        assertThat(produto.getQuantidadeEstoque()).isEqualByComparingTo("5.00"); // nenhuma baixa ainda
+        verify(produtoRepository, never()).save(any());
+    }
+
+    @Test
+    void concluir_semListaNova_deveUsarProdutosPlanejadosNoInicio() {
+        Agendamento agendamento = Agendamento.builder()
+                .id(1L).animal(animal()).servico(servico(60)).usuario(usuario())
+                .status(StatusAgendamento.EM_ATENDIMENTO)
+                .produtosPlanejados(new java.util.ArrayList<>(List.of(
+                        ProdutoPlanejado.builder().produtoId(1L).produtoNome("Shampoo").quantidade(new BigDecimal("2.00")).build())))
+                .build();
+        Produto produto = Produto.builder().id(1L).nome("Shampoo").quantidadeEstoque(new BigDecimal("5.00"))
+                .quantidadeMinima(new BigDecimal("1.00")).unidade("un").empresa(empresa()).build();
+
+        when(agendamentoRepository.findByIdAndEmpresaId(1L, EMPRESA_ID)).thenReturn(Optional.of(agendamento));
+        when(produtoRepository.findByIdAndEmpresaId(1L, EMPRESA_ID)).thenReturn(Optional.of(produto));
+        when(produtoRepository.save(any(Produto.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(agendamentoRepository.save(any(Agendamento.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var response = service.concluir(1L, null);
+
+        assertThat(response.status()).isEqualTo("CONCLUIDO");
+        assertThat(produto.getQuantidadeEstoque()).isEqualByComparingTo("3.00");
     }
 }

@@ -10,7 +10,14 @@ import lombok.Setter;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "usuario")
+@Table(name = "usuario", indexes = {
+        @Index(name = "idx_usuario_empresa", columnList = "empresa_id"),
+        @Index(name = "idx_usuario_nome", columnList = "nome"),
+        @Index(name = "idx_usuario_senha_hash", columnList = "senha_hash"),
+        @Index(name = "idx_usuario_ativo", columnList = "ativo"),
+        @Index(name = "idx_usuario_perfil", columnList = "perfil_id"),
+        @Index(name = "idx_usuario_criado_em", columnList = "criado_em"),
+})
 @Getter
 @Setter
 @NoArgsConstructor

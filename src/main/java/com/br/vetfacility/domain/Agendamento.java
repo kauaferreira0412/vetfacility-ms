@@ -1,5 +1,6 @@
 package com.br.vetfacility.domain;
 
+import com.br.vetfacility.enums.StatusAgendamento;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -12,7 +13,19 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "agendamento")
+@Table(name = "agendamento", indexes = {
+        @Index(name = "idx_agendamento_empresa", columnList = "empresa_id"),
+        @Index(name = "idx_agendamento_data", columnList = "empresa_id, data_hora"),
+        @Index(name = "idx_agendamento_animal", columnList = "animal_id"),
+        @Index(name = "idx_agendamento_servico", columnList = "servico_id"),
+        @Index(name = "idx_agendamento_usuario", columnList = "usuario_id"),
+        @Index(name = "idx_agendamento_data_hora", columnList = "data_hora"),
+        @Index(name = "idx_agendamento_status", columnList = "status"),
+        @Index(name = "idx_agendamento_observacao", columnList = "observacao"),
+        @Index(name = "idx_agendamento_motivo_cancelamento", columnList = "motivo_cancelamento"),
+        @Index(name = "idx_agendamento_iniciado_em", columnList = "iniciado_em"),
+        @Index(name = "idx_agendamento_criado_em", columnList = "criado_em"),
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -49,6 +62,9 @@ public class Agendamento {
     @Column(name = "motivo_cancelamento", length = 300)
     private String motivoCancelamento;
 
+    @Column(name = "iniciado_em")
+    private LocalDateTime iniciadoEm;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "empresa_id", nullable = false)
     private Empresa empresa;
@@ -59,6 +75,15 @@ public class Agendamento {
     @Builder.Default
     @OneToMany(mappedBy = "agendamento", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<AgendamentoProduto> produtosConsumidos = new ArrayList<>();
+
+    @Builder.Default
+    @ElementCollection
+    @CollectionTable(name = "agendamento_produto_planejado", joinColumns = @JoinColumn(name = "agendamento_id"), indexes = {
+            @Index(name = "idx_agendamento_produto_planejado_produto", columnList = "produto_id"),
+            @Index(name = "idx_agendamento_produto_planejado_produto_nome", columnList = "produto_nome"),
+            @Index(name = "idx_agendamento_produto_planejado_quantidade", columnList = "quantidade"),
+    })
+    private List<ProdutoPlanejado> produtosPlanejados = new ArrayList<>();
 
     @PrePersist
     void prePersist() {

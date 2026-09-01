@@ -7,11 +7,10 @@ import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.util.List;
 
-public record ConcluirAgendamentoRequest(
-        List<@Valid ProdutoConsumido> produtosConsumidos,
-        @DecimalMin(value = "0.01", message = "O valor cobrado deve ser maior que zero") BigDecimal valorCobrado
+public record IniciarAtendimentoRequest(
+        List<@Valid ProdutoPlanejado> produtosPlanejados
 ) {
-    public record ProdutoConsumido(
+    public record ProdutoPlanejado(
             @NotNull(message = "O produto é obrigatório") Long produtoId,
             @NotNull(message = "A quantidade é obrigatória")
             @DecimalMin(value = "0.01", message = "A quantidade deve ser maior que zero") BigDecimal quantidade

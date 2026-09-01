@@ -1,10 +1,12 @@
 package com.br.vetfacility.service;
 
 import com.br.vetfacility.domain.*;
+import com.br.vetfacility.enums.StatusAgendamento;
 import com.br.vetfacility.dto.agendamento.AgendamentoRequest;
 import com.br.vetfacility.dto.agendamento.AgendamentoResponse;
 import com.br.vetfacility.dto.agendamento.CancelarAgendamentoRequest;
 import com.br.vetfacility.dto.agendamento.ConcluirAgendamentoRequest;
+import com.br.vetfacility.dto.agendamento.IniciarAtendimentoRequest;
 import com.br.vetfacility.exception.BusinessException;
 import com.br.vetfacility.exception.ResourceNotFoundException;
 import com.br.vetfacility.repository.*;
@@ -26,16 +28,19 @@ public class AgendamentoService {
     private final UsuarioRepository usuarioRepository;
     private final ProdutoRepository produtoRepository;
     private final EmpresaRepository empresaRepository;
+    private final FinanceiroService financeiroService;
 
     public AgendamentoService(AgendamentoRepository agendamentoRepository, AnimalRepository animalRepository,
                                ServicoRepository servicoRepository, UsuarioRepository usuarioRepository,
-                               ProdutoRepository produtoRepository, EmpresaRepository empresaRepository) {
+                               ProdutoRepository produtoRepository, EmpresaRepository empresaRepository,
+                               FinanceiroService financeiroService) {
         this.agendamentoRepository = agendamentoRepository;
         this.animalRepository = animalRepository;
         this.servicoRepository = servicoRepository;
         this.usuarioRepository = usuarioRepository;
         this.produtoRepository = produtoRepository;
         this.empresaRepository = empresaRepository;
+        this.financeiroService = financeiroService;
     }
 
     @Transactional(readOnly = true)
@@ -114,7 +119,7 @@ public class AgendamentoService {
     }
 
     @Transactional
-    public AgendamentoResponse iniciarAtendimento(Long id) {
+    public AgendamentoResponse iniciarAtendimento(Long id, IniciarAtendimentoRequest request) {
         Long empresaId = SecurityUtils.currentEmpresaId();
         Agendamento agendamento = buscarOuFalhar(id, empresaId);
 
@@ -122,7 +127,30 @@ public class AgendamentoService {
             throw new BusinessException("Apenas agendamentos com status AGENDADO podem iniciar o atendimento.");
         }
 
+        agendamento.getProdutosPlanejados().clear();
+        if (request != null && request.produtosPlanejados() != null) {
+            request.produtosPlanejados().forEach(planejado -> {
+                Produto produto = produtoRepository.findByIdAndEmpresaId(planejado.produtoId(), empresaId)
+                        .orElseThrow(() -> new ResourceNotFoundException("Produto não encontrado."));
+                agendamento.getProdutosPlanejados().add(ProdutoPlanejado.builder()
+                        .produtoId(produto.getId())
+                        .produtoNome(produto.getNome())
+                        .quantidade(planejado.quantidade())
+                        .build());
+            });
+        } else {
+            // Sem seleção manual (EST-02/EST-03): usa os produtos padrão configurados para o
+            // tipo de serviço, se houver algum.
+            agendamento.getServico().getProdutosPadrao().forEach(padrao ->
+                    agendamento.getProdutosPlanejados().add(ProdutoPlanejado.builder()
+                            .produtoId(padrao.getProduto().getId())
+                            .produtoNome(padrao.getProduto().getNome())
+                            .quantidade(padrao.getQuantidadePadrao())
+                            .build()));
+        }
+
         agendamento.setStatus(StatusAgendamento.EM_ATENDIMENTO);
+        agendamento.setIniciadoEm(LocalDateTime.now());
         return AgendamentoResponse.from(agendamentoRepository.save(agendamento));
     }
 
@@ -135,28 +163,42 @@ public class AgendamentoService {
             throw new BusinessException("Apenas agendamentos AGENDADO ou EM_ATENDIMENTO podem ser concluídos.");
         }
 
-        if (request != null && request.produtosConsumidos() != null) {
-            request.produtosConsumidos().forEach(consumo -> {
-                Produto produto = produtoRepository.findByIdAndEmpresaId(consumo.produtoId(), empresaId)
-                        .orElseThrow(() -> new ResourceNotFoundException("Produto não encontrado."));
+        // Sem uma lista nova informada agora, reaproveita os produtos sinalizados no início do
+        // atendimento (ver iniciarAtendimento) - se não houve nenhum, o comportamento é o mesmo de
+        // antes (nenhuma baixa de estoque).
+        List<ConcluirAgendamentoRequest.ProdutoConsumido> produtosParaConsumir =
+                (request != null && request.produtosConsumidos() != null)
+                        ? request.produtosConsumidos()
+                        : agendamento.getProdutosPlanejados().stream()
+                                .map(p -> new ConcluirAgendamentoRequest.ProdutoConsumido(p.getProdutoId(), p.getQuantidade()))
+                                .toList();
 
-                if (produto.getQuantidadeEstoque().compareTo(consumo.quantidade()) < 0) {
-                    throw new BusinessException("Estoque insuficiente do produto '" + produto.getNome() + "'.");
-                }
-                produto.setQuantidadeEstoque(produto.getQuantidadeEstoque().subtract(consumo.quantidade()));
-                produtoRepository.save(produto);
+        produtosParaConsumir.forEach(consumo -> {
+            Produto produto = produtoRepository.findByIdAndEmpresaId(consumo.produtoId(), empresaId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Produto não encontrado."));
 
-                agendamento.getProdutosConsumidos().add(AgendamentoProduto.builder()
-                        .id(new AgendamentoProduto.Id(agendamento.getId(), produto.getId()))
-                        .agendamento(agendamento)
-                        .produto(produto)
-                        .quantidade(consumo.quantidade())
-                        .build());
-            });
-        }
+            if (produto.getQuantidadeEstoque().compareTo(consumo.quantidade()) < 0) {
+                throw new BusinessException("Estoque insuficiente do produto '" + produto.getNome() + "'.");
+            }
+            produto.setQuantidadeEstoque(produto.getQuantidadeEstoque().subtract(consumo.quantidade()));
+            produtoRepository.save(produto);
+
+            agendamento.getProdutosConsumidos().add(AgendamentoProduto.builder()
+                    .id(new AgendamentoProdutoId(agendamento.getId(), produto.getId()))
+                    .agendamento(agendamento)
+                    .produto(produto)
+                    .quantidade(consumo.quantidade())
+                    .build());
+        });
 
         agendamento.setStatus(StatusAgendamento.CONCLUIDO);
-        return AgendamentoResponse.from(agendamentoRepository.save(agendamento));
+        Agendamento concluido = agendamentoRepository.save(agendamento);
+
+        if (request != null && request.valorCobrado() != null) {
+            financeiroService.registrarGanhoDeAgendamento(concluido, request.valorCobrado());
+        }
+
+        return AgendamentoResponse.from(concluido);
     }
 
     private Agendamento buscarOuFalhar(Long id, Long empresaId) {

@@ -1,4 +1,4 @@
-package com.br.vetfacility.domain;
+package com.br.vetfacility.enums;
 
 public enum Sexo {
     MACHO,

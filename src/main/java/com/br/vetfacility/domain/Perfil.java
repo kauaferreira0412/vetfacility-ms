@@ -12,7 +12,12 @@ import java.util.HashSet;
 import java.util.Set;
 
 @Entity
-@Table(name = "perfil")
+@Table(name = "perfil", indexes = {
+        @Index(name = "idx_perfil_empresa", columnList = "empresa_id"),
+        @Index(name = "idx_perfil_nome", columnList = "nome"),
+        @Index(name = "idx_perfil_sistema", columnList = "sistema"),
+        @Index(name = "idx_perfil_criado_em", columnList = "criado_em"),
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -42,7 +47,10 @@ public class Perfil {
     @JoinTable(
             name = "perfil_permissao",
             joinColumns = @JoinColumn(name = "perfil_id"),
-            inverseJoinColumns = @JoinColumn(name = "permissao_id")
+            inverseJoinColumns = @JoinColumn(name = "permissao_id"),
+            indexes = {
+                    @Index(name = "idx_perfil_permissao_permissao", columnList = "permissao_id"),
+            }
     )
     private Set<Permissao> permissoes = new HashSet<>();
 

@@ -20,4 +20,6 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     boolean existsByPerfilId(@Param("perfilId") Long perfilId);
 
     List<Usuario> findAllByEmpresaId(@Param("empresaId") Long empresaId);
+
+    Optional<Usuario> findByIdAndEmpresaId(Long id, Long empresaId);
 }

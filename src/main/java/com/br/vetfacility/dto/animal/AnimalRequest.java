@@ -1,7 +1,7 @@
 package com.br.vetfacility.dto.animal;
 
-import com.br.vetfacility.domain.Porte;
-import com.br.vetfacility.domain.Sexo;
+import com.br.vetfacility.enums.Porte;
+import com.br.vetfacility.enums.Sexo;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
